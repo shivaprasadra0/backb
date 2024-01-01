@@ -11,17 +11,8 @@ app.use(express.static(path.join(__dirname, './build')));
 
 app.get('/api/top100cryptos', async (req, res) => {
   try {
-    const response = await axios.get('https://api.coingecko.com/api/v3/coins/markets', {
-      params: {
-        vs_currency: 'usd',
-        order: 'market_cap_desc',
-        per_page: 100,
-        page: 1,
-        sparkline: false,
-      },
-    });
-
-    const top100Cryptos = response.data;
+    const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false');
+    const top100Cryptos = await response.json();
     res.json(top100Cryptos);
   } catch (error) {
     console.error(error);
@@ -33,28 +24,28 @@ app.get('/api/convert', async (req, res) => {
   const { sourceCrypto, amount, targetCurrency } = req.query;
 
   try {
-    const cryptoPriceResponse = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: {
-        ids: sourceCrypto,
-        vs_currencies: 'usd',
-      },
-    });
+    const cryptoPriceResponse = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${sourceCrypto}&vs_currencies=usd,eur`);
+    const cryptoPriceData = await cryptoPriceResponse.json();
 
-    const sourceCryptoPrice = cryptoPriceResponse.data[sourceCrypto]?.usd;
+    const sourceCryptoPriceUSD = cryptoPriceData[sourceCrypto]?.usd;
+    const sourceCryptoPriceEUR = cryptoPriceData[sourceCrypto]?.eur;
 
-    if (!sourceCryptoPrice) {
+    if (!sourceCryptoPriceUSD || !sourceCryptoPriceEUR) {
       return res.status(400).json({ error: 'Invalid source cryptocurrency' });
     }
 
-    const exchangeRateResponse = await axios.get('https://api.coingecko.com/api/v3/exchange_rates');
+    const exchangeRateResponse = await fetch('https://api.coingecko.com/api/v3/exchange_rates');
+    const exchangeRateData = await exchangeRateResponse.json();
 
-    const targetCurrencyRate = exchangeRateResponse.data.rates[targetCurrency];
+    let convertedAmount;
 
-    if (!targetCurrencyRate) {
+    if (targetCurrency === 'usd') {
+      convertedAmount = amount * sourceCryptoPriceUSD ;
+    } else if (targetCurrency === 'eur') {
+      convertedAmount = amount * sourceCryptoPriceEUR ;
+    } else {
       return res.status(400).json({ error: 'Invalid target currency' });
     }
-
-    const convertedAmount = amount * sourceCryptoPrice * targetCurrencyRate.value;
 
     res.json({
       sourceCrypto,
@@ -75,3 +66,4 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
